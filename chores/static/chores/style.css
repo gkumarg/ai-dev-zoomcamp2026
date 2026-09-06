@@ -240,3 +240,90 @@ form + a {
   background: var(--success-bg);
   color: var(--success);
 }
+
+/* Assign page ------------------------------------------------------------ */
+
+.agent-note {
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.agent-message {
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  margin: 0 0 1.5rem 0;
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.agent-message.error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.assignment-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem 0;
+}
+
+.assignment-list li {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.reasoning-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  white-space: pre-wrap;
+  margin-bottom: 1.5rem;
+}
+
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--muted);
+  margin-top: 0.75rem;
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: assign-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes assign-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.diagnostics {
+  margin-top: 2.5rem;
+  color: var(--muted);
+}
+
+.diagnostics summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.diagnostics table {
+  margin-top: 0.75rem;
+}

@@ -8,6 +8,7 @@ tool dispatch, refusals, the iteration cap, and transport failure.
 import copy
 import json
 import urllib.error
+from unittest import mock
 
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -516,6 +517,36 @@ class OllamaClientTests(TestCase):
 
         self.assertFalse(result.ok)
         self.assertIn("Could not reach Ollama", result.error)
+
+
+class DefaultClientTests(TestCase):
+    """The no-argument call is what the view actually makes, so the default
+    wiring deserves a test even though every other test injects a client."""
+
+    def setUp(self):
+        self.alex = Person.objects.create(name="Alex")
+        Chore.objects.create(name="Dishes", effort=2)
+
+    def test_run_assignment_builds_an_ollama_client_from_settings(self):
+        with mock.patch("chores.agent.runner.OllamaClient") as client_class:
+            client_class.return_value.chat.return_value = {
+                "message": {"role": "assistant", "content": "Nothing to do."}
+            }
+
+            result = run_assignment()
+
+        client_class.assert_called_once_with()
+        self.assertTrue(result.ok)
+
+    def test_a_dead_default_client_still_returns_a_result(self):
+        # The realistic first-run failure: the app is up, Ollama is not.
+        with mock.patch("chores.agent.runner.OllamaClient") as client_class:
+            client_class.return_value.chat.side_effect = TransportError("Ollama is not running.")
+
+            result = run_assignment()
+
+        self.assertFalse(result.ok)
+        self.assertIn("Ollama is not running.", result.message)
 
 
 class EmptyStateTests(TestCase):

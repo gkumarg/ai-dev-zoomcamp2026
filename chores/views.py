@@ -1,9 +1,11 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from .agent.runner import run_assignment
 from .forms import ChoreForm, PersonForm
 from .models import Chore, Person
 
@@ -105,11 +107,60 @@ def chore_complete(request, pk):
     return redirect("chores:chore_list")
 
 
-# --- Assign (stub) --------------------------------------------------------
+# --- Assign -----------------------------------------------------------
 
 
 def assign(request):
-    return render(request, "chores/assign_stub.html")
+    """GET shows the current state and a button; POST runs the agent.
+
+    The agent call is synchronous and can take tens of seconds (it's a
+    local LLM), so the result is rendered on this same page rather than a
+    separate results view — per the plan. `run_assignment` is called via
+    the module-level name above (not `runner.run_assignment(...)`) so tests
+    can swap it out with `mock.patch("chores.views.run_assignment", ...)`
+    and inject a fake client-free result with no network call.
+
+    A POST is not redirected afterwards (no PRG), so reloading the result
+    page will make the browser offer to resubmit the form and re-run the
+    agent. That's a deliberate tradeoff: `assign_chore` only ever touches
+    chores that are still `pending`, so a re-run is wasted time, not a
+    correctness problem — nothing already assigned can be assigned again.
+    Avoiding it would mean serializing the frozen `Assignment`/`ToolCall`
+    dataclasses into the session, which isn't worth it for a resubmit
+    browsers already guard against and warn about.
+    """
+    result = None
+    if request.method == "POST":
+        result = run_assignment()
+
+    people = list(Person.objects.with_effort_totals())
+    # Effort already sunk into completed chores (`effort_total`) doesn't move
+    # just because a chore got assigned — only `mark_complete()` writes
+    # `History`. So the assignment's fairness effect is shown separately,
+    # as each person's currently-assigned-but-not-yet-done effort, computed
+    # in its own query rather than chained onto `with_effort_totals()`'s
+    # queryset (annotating two different reverse relations in one query
+    # would multiply the sums via the join).
+    assigned_totals = dict(
+        Chore.objects.filter(status=Chore.Status.ASSIGNED)
+        .values("assigned_to")
+        .annotate(total=Sum("effort"))
+        .values_list("assigned_to", "total")
+    )
+    for person in people:
+        person.assigned_effort = assigned_totals.get(person.id, 0)
+
+    pending_chores = Chore.objects.filter(status=Chore.Status.PENDING)
+
+    return render(
+        request,
+        "chores/assign.html",
+        {
+            "people": people,
+            "pending_chores": pending_chores,
+            "result": result,
+        },
+    )
 
 
 # --- Status ---------------------------------------------------------------
