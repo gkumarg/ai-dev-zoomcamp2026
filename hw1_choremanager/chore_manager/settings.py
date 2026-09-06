@@ -130,22 +130,27 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
-# The task-8 spike's leading candidate, NOT yet verified: the spike needs a
-# machine with Ollama and has not been run (see _docs/model-spike.md). Treat
-# this as a placeholder until that table is filled in.
+# Measured by the task-8 spike (_docs/model-spike.md): assigns every chore,
+# invents no ids, and cuts the effort spread from 9 to 2. It is slow — see the
+# timeout below — but it is the only configuration measured that is actually
+# fair, so correctness wins over latency here.
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:8b")
 
-# Seconds per HTTP call. A cold model can spend well over a minute loading
-# before it generates a token, and a reasoning model then thinks for a while
-# on top of that — 120s turned out to be too tight on real hardware. The agent
-# runs inline in a request, so this is also the worst case a user waits per
-# model turn.
-OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))
+# Seconds per HTTP call. qwen3:8b was measured at 289s per assignment run on a
+# CPU laptop, so 300 left no headroom at all; 600 does. The agent runs inline
+# in a request, so this is also the worst case a user waits, and five minutes
+# of that is the project's main open problem — see _docs/model-spike.md.
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
 
-# Reasoning models (qwen3 and friends) emit a long thinking block before
-# answering. Set OLLAMA_THINK=0 to turn that off — much faster, at some cost to
-# reasoning quality. Left unset by default because models that cannot think
-# reject the parameter outright.
+# Reasoning models emit a long thinking block before answering. OLLAMA_THINK=0
+# turns that off.
+#
+# Do NOT do that with qwen3:8b. Measured, it is 11x faster and actively wrong:
+# the effort spread lands at 10, worse than the 9 you get by assigning nothing,
+# and it explains that result just as confidently. For this model the thinking
+# block IS the fairness reasoning.
+#
+# Left unset by default: models that cannot think reject the parameter.
 OLLAMA_THINK = {"0": False, "1": True}.get(os.environ.get("OLLAMA_THINK", ""))
 
 # Hard cap on model turns per assignment run, so a model that loops (or keeps

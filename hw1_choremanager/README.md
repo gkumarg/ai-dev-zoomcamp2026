@@ -53,21 +53,25 @@ Configuration, all via environment variables:
 |---|---|---|
 | `OLLAMA_HOST` | `http://localhost:11434` | where Ollama is listening |
 | `OLLAMA_MODEL` | `qwen3:8b` | must support tool calling |
-| `OLLAMA_TIMEOUT` | `300` | seconds per model call |
-| `OLLAMA_THINK` | unset | `0` disables the thinking block on reasoning models |
+| `OLLAMA_TIMEOUT` | `600` | seconds per model call |
+| `OLLAMA_THINK` | unset | `0` disables thinking — see the warning below |
 | `OLLAMA_MAX_ITERATIONS` | `12` | model turns before the run is cut off |
 
-If the assign page reports that Ollama did not finish in time, the model is
-still generating rather than missing: a cold model can take a minute-plus to
-load, and a reasoning model like qwen3 then thinks at length before its first
-tool call. Set `OLLAMA_THINK=0`, raise `OLLAMA_TIMEOUT`, or use a smaller
-model such as `granite4:3b`.
+> **Do not set `OLLAMA_THINK=0` with qwen3.** It makes the run 11x faster and
+> the answer wrong — the spike measured an effort spread of 10, worse than the
+> 9 you get by assigning nothing, explained just as confidently. For this model
+> the thinking block *is* the fairness reasoning. Details in
+> [`_docs/model-spike.md`](_docs/model-spike.md).
 
-> **The default model is a placeholder.** The comparison spike has not been
-> run yet — it needs a machine with Ollama. See
-> [`_docs/model-spike.md`](_docs/model-spike.md) and run
-> `python scripts/spike_tool_calling.py --runs 3` to pick a winner on your own
-> hardware.
+**Expect the assign page to take several minutes.** `qwen3:8b` was measured at
+~289s per run on a CPU laptop, plus up to 90s to load the model the first time.
+That is the honest cost of a local model that reasons correctly; making it
+responsive is the project's main open problem. If the page reports that Ollama
+did not finish in time, raise `OLLAMA_TIMEOUT` rather than disabling thinking.
+
+`qwen3:8b` is the default because it was measured, not because it was
+recommended: see [`_docs/model-spike.md`](_docs/model-spike.md) for the numbers
+and `scripts/spike_tool_calling.py` to run the comparison on your own hardware.
 
 ## Using it
 
@@ -81,8 +85,9 @@ model such as `granite4:3b`.
   actually holding up over time.
 
 The agent runs **synchronously inside the request** (a deliberate v1 choice —
-see the plan). A local model can take tens of seconds, and the page will sit
-there while it thinks.
+see the plan). Measured, that is around five minutes of the page sitting there
+while the model thinks. It was a reasonable simplification before anyone knew
+the latency; it is now the main thing wrong with the design.
 
 ## How the agent works
 
