@@ -1,0 +1,32 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Chore Manager{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'chores/style.css' %}">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="{% url 'chores:chore_list' %}">Chore Manager</a>
+      <nav>
+        <a href="{% url 'chores:person_list' %}">People</a>
+        <a href="{% url 'chores:chore_list' %}">Chores</a>
+        <a href="{% url 'chores:assign' %}">Assign</a>
+        <a href="{% url 'chores:status' %}">Status</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    {% if messages %}
+      <ul class="messages">
+        {% for message in messages %}
+          <li class="message {{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

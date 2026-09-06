@@ -1,0 +1,33 @@
+{% extends "chores/base.html" %}
+
+{% block title %}People — Chore Manager{% endblock %}
+
+{% block content %}
+<h1>People</h1>
+
+{% if people %}
+<table class="data-table">
+  <thead>
+    <tr><th>Name</th><th>Cumulative effort</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for person in people %}
+    <tr>
+      <td>{{ person.name }}</td>
+      <td>{{ person.effort_total }}</td>
+      <td><a href="{% url 'chores:person_remove_confirm' person.pk %}">Remove</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No one's on the roster yet — add someone below.</p>
+{% endif %}
+
+<h2>Add a person</h2>
+<form method="post" action="{% url 'chores:person_add' %}">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Add person</button>
+</form>
+{% endblock %}
