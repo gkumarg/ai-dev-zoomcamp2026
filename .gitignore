@@ -8,8 +8,14 @@ venv/
 # Django
 db.sqlite3
 db.sqlite3-journal
-/staticfiles/
-/media/
+staticfiles/
+media/
+
+# Test / coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
 
 # Environment
 .env
