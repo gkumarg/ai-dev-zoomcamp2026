@@ -1,0 +1,154 @@
+{% extends "chores/base.html" %}
+
+{% block title %}Assign — Chore Manager{% endblock %}
+
+{% block content %}
+<h1>Assign chores</h1>
+
+<p class="agent-note">
+  This calls a local LLM (via Ollama) to decide who gets each pending
+  chore, weighing everyone's cumulative effort so far. It runs
+  synchronously and can take tens of seconds to a couple of minutes —
+  please wait for it to finish rather than navigating away. Once it's
+  done, reloading this page will ask your browser to resubmit the form,
+  which runs the agent again (harmless, just slow — it only ever touches
+  chores still pending).
+</p>
+
+{% if result %}
+  <p class="agent-message{% if not result.ok %} error{% endif %}">
+    {{ result.message }}
+  </p>
+
+  <h2>Assignments</h2>
+  {% if result.assignments %}
+  <ul class="assignment-list">
+    {% for assignment in result.assignments %}
+    <li>{{ assignment.chore_name }} &rarr; {{ assignment.person_name }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-state">No chores were assigned this run.</p>
+  {% endif %}
+
+  <h2>Model's reasoning</h2>
+  {% if result.reasoning %}
+  <div class="reasoning-block">{{ result.reasoning }}</div>
+  {% else %}
+  <p class="empty-state">The model didn't return an explanation this run.</p>
+  {% endif %}
+
+  {% if result.unassigned %}
+  <h2>Still pending</h2>
+  <ul class="assignment-list">
+    {% for name in result.unassigned %}
+    <li>{{ name }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <details class="diagnostics">
+    <summary>Run diagnostics ({{ result.iterations }} iteration{{ result.iterations|pluralize }}, {{ result.tool_calls|length }} tool call{{ result.tool_calls|length|pluralize }}, {{ result.refusals|length }} refusal{{ result.refusals|length|pluralize }})</summary>
+
+    {% if result.refusals %}
+    <h3>Refusals</h3>
+    <ul>
+      {% for refusal in result.refusals %}
+      <li>{{ refusal }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if result.tool_calls %}
+    <h3>Tool calls</h3>
+    <table class="data-table">
+      <thead>
+        <tr><th>Tool</th><th>Arguments</th><th>Ok?</th><th>Result / error</th></tr>
+      </thead>
+      <tbody>
+        {% for call in result.tool_calls %}
+        <tr>
+          <td>{{ call.name }}</td>
+          <td>{{ call.arguments }}</td>
+          <td>{{ call.ok }}</td>
+          <td>{% if call.ok %}{{ call.result }}{% else %}{{ call.error }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </details>
+{% endif %}
+
+<h2>Pending chores</h2>
+{% if pending_chores %}
+<table class="data-table">
+  <thead>
+    <tr><th>Name</th><th>Effort</th></tr>
+  </thead>
+  <tbody>
+    {% for chore in pending_chores %}
+    <tr>
+      <td>{{ chore.name }}</td>
+      <td>{{ chore.effort }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No chores are pending right now, so there's nothing to assign.</p>
+{% endif %}
+
+{% if not people %}
+<p class="empty-state">There's nobody on the roster yet, so there's nothing to assign either.</p>
+{% else %}
+<form id="assign-form" method="post" action="{% url 'chores:assign' %}">
+  {% csrf_token %}
+  <button id="assign-button" type="submit" {% if not pending_chores %}disabled{% endif %}>Assign Chores</button>
+  <p id="assign-indicator" class="thinking-indicator" hidden>
+    <span class="spinner" aria-hidden="true"></span>
+    The local model is thinking, this can take a while&hellip;
+  </p>
+</form>
+{% endif %}
+
+<h2>Effort totals</h2>
+{% if people %}
+<table class="data-table">
+  <thead>
+    <tr><th>Person</th><th>Completed effort</th><th>Currently assigned (not done yet)</th></tr>
+  </thead>
+  <tbody>
+    {% for person in people %}
+    <tr>
+      <td>{{ person.name }}</td>
+      <td>{{ person.effort_total }}</td>
+      <td>{{ person.assigned_effort }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No one's on the roster yet, so there's nothing to balance.</p>
+{% endif %}
+
+<script>
+  (function () {
+    var form = document.getElementById("assign-form");
+    if (!form) {
+      return;
+    }
+    form.addEventListener("submit", function () {
+      var button = document.getElementById("assign-button");
+      var indicator = document.getElementById("assign-indicator");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Thinking…";
+      }
+      if (indicator) {
+        indicator.hidden = false;
+      }
+    });
+  })();
+</script>
+{% endblock %}

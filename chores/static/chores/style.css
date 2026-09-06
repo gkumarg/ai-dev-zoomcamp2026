@@ -1,0 +1,329 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f7f4;
+  --surface: #ffffff;
+  --text: #1f2421;
+  --muted: #6b7570;
+  --border: #dfe3de;
+  --accent: #3b6e58;
+  --accent-hover: #2c5443;
+  --danger: #a4342a;
+  --danger-bg: #fbeceb;
+  --success: #3b6e58;
+  --success-bg: #eaf3ee;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-header nav {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.site-header nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.site-header nav a:hover {
+  color: var(--accent);
+}
+
+main.container {
+  padding-top: 2rem;
+  padding-bottom: 3rem;
+}
+
+h1 {
+  margin-top: 0;
+}
+
+h2 {
+  margin-top: 2.5rem;
+  font-size: 1.1rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table th {
+  background: #eef1ec;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.empty-state {
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+form.inline-form {
+  display: inline;
+}
+
+p label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+input[type="text"],
+input[type="number"] {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1rem;
+  width: 100%;
+  max-width: 320px;
+}
+
+button,
+input[type="submit"] {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--accent-hover);
+}
+
+button.danger {
+  background: var(--danger);
+}
+
+a.button-link,
+form + a {
+  color: var(--muted);
+  text-decoration: none;
+  margin-left: 0.75rem;
+}
+
+.errorlist {
+  color: var(--danger);
+  list-style: none;
+  padding: 0;
+  margin: 0.2rem 0;
+  font-size: 0.9rem;
+}
+
+.messages {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem 0;
+}
+
+.messages .message {
+  padding: 0.65rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.messages .message.success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.messages .message.error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.filter-tabs a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.filter-tabs a.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge-pending {
+  background: #f1ecdd;
+  color: #8a6d1c;
+}
+
+.badge-assigned {
+  background: #e3ecf7;
+  color: #2c568a;
+}
+
+.badge-done {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+/* Assign page ------------------------------------------------------------ */
+
+.agent-note {
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.agent-message {
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  margin: 0 0 1.5rem 0;
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.agent-message.error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.assignment-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem 0;
+}
+
+.assignment-list li {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.reasoning-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  white-space: pre-wrap;
+  margin-bottom: 1.5rem;
+}
+
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--muted);
+  margin-top: 0.75rem;
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: assign-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes assign-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.diagnostics {
+  margin-top: 2.5rem;
+  color: var(--muted);
+}
+
+.diagnostics summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.diagnostics table {
+  margin-top: 0.75rem;
+}

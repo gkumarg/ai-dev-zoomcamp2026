@@ -1,0 +1,16 @@
+{% extends "chores/base.html" %}
+
+{% block title %}Remove {{ person.name }} — Chore Manager{% endblock %}
+
+{% block content %}
+<h1>Remove {{ person.name }}?</h1>
+<p>
+  This deletes {{ person.name }} and their completed-chore history. Any
+  chores currently assigned to them go back to the pending pool.
+</p>
+<form method="post" action="{% url 'chores:person_remove' person.pk %}">
+  {% csrf_token %}
+  <button type="submit" class="danger">Yes, remove {{ person.name }}</button>
+  <a href="{% url 'chores:person_list' %}">Cancel</a>
+</form>
+{% endblock %}

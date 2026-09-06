@@ -1,0 +1,25 @@
+{% extends "chores/base.html" %}
+
+{% block title %}Status — Chore Manager{% endblock %}
+
+{% block content %}
+<h1>Status</h1>
+
+{% if people %}
+<table class="data-table">
+  <thead>
+    <tr><th>Person</th><th>Cumulative effort</th></tr>
+  </thead>
+  <tbody>
+    {% for person in people %}
+    <tr>
+      <td>{{ person.name }}</td>
+      <td>{{ person.effort_total }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No one's on the roster yet, so there's nothing to balance.</p>
+{% endif %}
+{% endblock %}

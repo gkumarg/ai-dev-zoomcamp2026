@@ -1,0 +1,49 @@
+{% extends "chores/base.html" %}
+
+{% block title %}Chores — Chore Manager{% endblock %}
+
+{% block content %}
+<h1>Chores</h1>
+
+<div class="filter-tabs">
+  <a href="{% url 'chores:chore_list' %}" class="{% if not status_filter %}active{% endif %}">All</a>
+  {% for value, label in statuses %}
+  <a href="?status={{ value }}" class="{% if status_filter == value %}active{% endif %}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+{% if chores %}
+<table class="data-table">
+  <thead>
+    <tr><th>Name</th><th>Effort</th><th>Status</th><th>Assigned to</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for chore in chores %}
+    <tr>
+      <td>{{ chore.name }}</td>
+      <td>{{ chore.effort }}</td>
+      <td><span class="badge badge-{{ chore.status }}">{{ chore.get_status_display }}</span></td>
+      <td>{{ chore.assigned_to.name|default:"—" }}</td>
+      <td>
+        {% if chore.status != "done" %}
+        <form class="inline-form" method="post" action="{% url 'chores:chore_complete' chore.pk %}">
+          {% csrf_token %}
+          <button type="submit">Mark complete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No chores match this filter yet.</p>
+{% endif %}
+
+<h2>Add a chore</h2>
+<form method="post" action="{% url 'chores:chore_add' %}">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Add chore</button>
+</form>
+{% endblock %}
