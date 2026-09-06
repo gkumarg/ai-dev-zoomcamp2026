@@ -1,37 +1,45 @@
 # Household Chore Manager — Homework Spec
 
 **Course:** AI Dev Tools Zoomcamp (DataTalksClub)
-**Interface:** CLI (Python)
-**Persistence:** SQLite
+**Interface:** Django web app
+**Persistence:** SQLite (Django ORM)
 **LLM:** Local via Ollama, tool-calling agent
+**Execution model:** Synchronous (agent runs inline within a Django view)
 
 ## Goal
 
-Build a CLI tool that manages shared household chores and uses an LLM
-agent to fairly assign chores based on effort-weighted history, not
-just rotation or raw chore count.
+Build a Django web app that manages shared household chores and uses
+an LLM agent to fairly assign chores based on effort-weighted
+history, not just rotation or raw chore count.
 
-## Data Model (SQLite)
+## Project Structure
 
-- `people` — id, name
-- `chores` — id, name, effort (1–5), status (pending/assigned/done)
-- `history` — id, person_id, chore_id, effort, completed_at
+- Single Django project (e.g. `choremanager`)
+- Single Django app (e.g. `chores`) holding all models, views, and
+  the agent logic
+- App registered in `INSTALLED_APPS` in `settings.py`
+- Run with: `uv run python manage.py runserver`
+
+## Data Model (Django models / SQLite)
+
+- `Person` — id, name
+- `Chore` — id, name, effort (1–5), status (pending/assigned/done)
+- `History` — id, person (FK), chore (FK), effort, completed_at
 
 ## Features (4 total)
 
 ### 1. Roster management
-- `add-person <name>`
-- `remove-person <name>`
-- `list-people`
-- Plain CRUD, no agent involved.
+- Pages/views: list people, add person (form), remove person
+- Plain CRUD via Django views + templates, no agent involved.
 
 ### 2. Chore management
-- `add-chore <name> --effort <1-5>`
-- `list-chores`
-- Plain CRUD, no agent involved.
+- Pages/views: list chores, add chore (form, includes effort 1–5)
+- Plain CRUD via Django views + templates, no agent involved.
 
 ### 3. Agentic assignment (core feature)
-- `assign`
+- A page with an "Assign Chores" button, triggering a view that runs
+  the agent synchronously and renders the result on the same page
+  once done.
 - Tool-calling agent (Ollama model with function-calling support)
 - Agent has access to these tools:
   - `get_people()`
@@ -40,19 +48,22 @@ just rotation or raw chore count.
   - `assign_chore(chore_id, person_id)`
 - Agent reasons over current effort balance across people and
   assigns pending chores to even it out.
-- Agent prints its reasoning in plain language alongside the
-  assignment result.
+- Agent's reasoning is displayed in plain language alongside the
+  assignment result on the page.
 
 ### 4. Status / completion tracking
-- `complete-chore <id>` — marks a chore done, logs an entry to `history`
-- `status` — shows cumulative effort per person, to verify fairness
-  over time
+- View/page: mark a chore complete (updates status, logs a `History`
+  entry)
+- View/page: `status` — shows cumulative effort per person, to
+  verify fairness over time
 
 ## Deferred / Future Work (not built in v1)
 
 - `remind` — natural-language nudge for whoever's behind
 - Preference-awareness (factoring in dislikes/likes)
-- Separate `report` command (folded into `status` for v1)
+- Separate `report` view (folded into `status` for v1)
+- Background/async task execution (e.g. Celery) for the agent call
+- Splitting into multiple Django apps (e.g. `roster` + `chores`)
 
 ## Tech Notes
 
