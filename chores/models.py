@@ -1,5 +1,20 @@
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
+
+
+class PersonQuerySet(models.QuerySet):
+    def with_effort_totals(self):
+        """Annotate each person with `effort_total`, heaviest first.
+
+        The annotation is deliberately named differently from the
+        `total_effort()` method below: an annotation of the same name would
+        shadow the method on the returned instances and break callers that
+        use the parentheses form.
+        """
+        return self.annotate(
+            effort_total=models.Sum("history__effort", default=0),
+        ).order_by("-effort_total", "name")
 
 
 class Person(models.Model):
@@ -7,12 +22,22 @@ class Person(models.Model):
 
     name = models.CharField(max_length=100, unique=True)
 
+    objects = PersonQuerySet.as_manager()
+
     class Meta:
         ordering = ["name"]
         verbose_name_plural = "people"
 
     def __str__(self):
         return self.name
+
+    def total_effort(self):
+        """Cumulative effort this person has completed.
+
+        Use `Person.objects.with_effort_totals()` when you need this for a
+        list of people — calling this in a loop is one query per person.
+        """
+        return self.history.aggregate(total=models.Sum("effort", default=0))["total"]
 
 
 class Chore(models.Model):
@@ -54,6 +79,30 @@ class Chore(models.Model):
 
     def __str__(self):
         return f"{self.name} (effort {self.effort})"
+
+    @transaction.atomic
+    def mark_complete(self, person=None):
+        """Mark this chore done and log the effort against `person`.
+
+        Falls back to whoever the chore is assigned to. Returns the new
+        `History` entry.
+        """
+        person = person or self.assigned_to
+        if person is None:
+            raise ValidationError(
+                f"'{self.name}' is not assigned to anyone, so there is nobody "
+                f"to credit the effort to."
+            )
+        if self.status == self.Status.DONE:
+            # Completing twice would double-count the effort and quietly skew
+            # every fairness calculation downstream.
+            raise ValidationError(f"'{self.name}' is already done.")
+
+        entry = History.objects.create(person=person, chore=self, effort=self.effort)
+        self.status = self.Status.DONE
+        self.assigned_to = person
+        self.save(update_fields=["status", "assigned_to"])
+        return entry
 
 
 class History(models.Model):
