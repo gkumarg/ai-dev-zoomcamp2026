@@ -93,13 +93,51 @@ the harness is that you don't have to trust them.
 
 ## Results
 
-Fill in from your local run:
+Measured on a Windows laptop (CPU inference), thinking left **on**.
 
-| Model | Assigned all 4 | Spread | Refusals | Median secs | Verdict |
-|---|---|---|---|---|---|
-| `qwen3:8b` | | | | | |
-| | | | | | |
+| Model | Assigned all 4 | Spread (from 9) | Refusals | Load | Run | Verdict |
+|---|---|---|---|---|---|---|
+| `qwen3:8b` | 4/4 | **2** | 0 | 91s | **289s** | Correct, far too slow |
+| `llama3.2:3b` | | | | | | not yet run |
+| `deepseek-r1:latest` | | | | | | not yet run |
 
-**Winner:** _TBD_ — record it in `_docs/plan.md` Tech Notes with one
-sentence on why, and set it as the default in `settings.py`
-(`OLLAMA_MODEL`).
+**Winner:** _still TBD_ — see the two findings below.
+
+### Finding 1 — the quality is genuinely there
+
+`qwen3:8b` assigned all four chores, invented no ids (zero refusals), and
+took the effort spread from 9 down to 2 — near the optimum. It gave Alex,
+already on 12, nothing at all. This is the behaviour the whole feature exists
+for, and a rotation would not have produced it.
+
+### Finding 2 — 289 seconds is not a web page
+
+The run took **4 minutes 49 seconds**, against an `OLLAMA_TIMEOUT` default of
+300s. That is a 10-second margin, on the spike's tiny 3-person fixture. A real
+household with more history would blow straight through it.
+
+The plan's v1 choice — agent runs inline in the request — assumed the model
+answered in something like a spinner's worth of time. At five minutes it does
+not. The options, cheapest first:
+
+1. `--no-think` / `OLLAMA_THINK=0`. qwen3 spends most of that time in its
+   reasoning block. **Run the spike both ways before deciding anything else.**
+2. A smaller model. `llama3.2:3b` is pulled and untested.
+3. Take the deferred Celery work off the backlog and make the run async.
+
+### Finding 3 — the explanation did not match the assignment
+
+The reasoning text said Sam took *Clean bathroom + Bins* and Jo took
+*Vacuum + Dishes*. That allocation produces a spread of **3**. The harness
+measured **2**, so that is not what it actually did — the real assignment was
+one of three other combinations, all better than the one described.
+
+The narrative is post-hoc and only roughly true. That matters here because the
+plan makes "the agent explains its reasoning" a feature in its own right, and
+this explanation would mislead a user comparing it against the assignments on
+screen. Worth checking whether it holds across `--runs 3`: an occasional slip
+is one thing, a consistent mismatch is a reason to prefer another model, or to
+stop presenting the text as an account of what it did.
+
+Note that this is only detectable because the harness scores the *outcome*
+independently of what the model says about it.

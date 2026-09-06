@@ -67,8 +67,15 @@ history, not just rotation or raw chore count.
 
 ## Tech Notes
 
-- LLM: Ollama, model TBD — must support tool/function calling
-  reliably (verify before committing to a specific model).
+- LLM: Ollama. `qwen3:8b` is measured and correct — all four chores
+  assigned, no hallucinated ids, effort spread cut from 9 to 2 — but
+  took 289s per run with thinking on, which is not viable for a
+  synchronous view. Not yet committed to as the default; see
+  `_docs/model-spike.md` for the open question (thinking off, or a
+  smaller model, or async).
 - No API costs; local inference only.
+- The synchronous-execution choice above is now the binding constraint
+  rather than a simplification: whatever model wins has to answer in
+  seconds, not minutes.
 - Grading rubric (evals, tracing, etc.) not yet confirmed against
   course requirements — to be checked separately.

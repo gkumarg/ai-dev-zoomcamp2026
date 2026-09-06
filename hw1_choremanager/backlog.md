@@ -8,11 +8,15 @@ roster, chores, completion, status, and the agent-driven assign page —
 with 153 tests and 100% statement coverage of the application code.
 
 **The one open task is [#8](#8-pick-the-ollama-model-spike): choosing the
-Ollama model.** It needs a machine with Ollama, which the cloud dev
-container does not have. The harness is written and self-tested; see
-[`_docs/model-spike.md`](_docs/model-spike.md) to run it and record a
-winner. Until then `OLLAMA_MODEL` defaults to `qwen3:8b` as an unverified
-placeholder.
+Ollama model.** It has now been run for the first time, on real hardware.
+`qwen3:8b` gets the answer right — all four chores assigned, no
+hallucinated ids, effort spread cut from 9 to 2 — but takes **289 seconds**
+per run, against a 300s timeout, which no synchronous web page can wear.
+
+So the open question has changed shape: not "does a local model work?"
+(it does) but "which configuration answers fast enough?" Next steps and
+two further findings are in
+[`_docs/model-spike.md`](_docs/model-spike.md).
 
 ---
 
