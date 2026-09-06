@@ -135,10 +135,18 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 # this as a placeholder until that table is filled in.
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:8b")
 
-# Seconds per HTTP call. Generous because a cold local model can take a while
-# to load; the agent runs inline in a request, so this is also the worst case
-# a user waits per model turn.
-OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "120"))
+# Seconds per HTTP call. A cold model can spend well over a minute loading
+# before it generates a token, and a reasoning model then thinks for a while
+# on top of that — 120s turned out to be too tight on real hardware. The agent
+# runs inline in a request, so this is also the worst case a user waits per
+# model turn.
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "300"))
+
+# Reasoning models (qwen3 and friends) emit a long thinking block before
+# answering. Set OLLAMA_THINK=0 to turn that off — much faster, at some cost to
+# reasoning quality. Left unset by default because models that cannot think
+# reject the parameter outright.
+OLLAMA_THINK = {"0": False, "1": True}.get(os.environ.get("OLLAMA_THINK", ""))
 
 # Hard cap on model turns per assignment run, so a model that loops (or keeps
 # retrying a bad id) gives up instead of pinning a worker.
