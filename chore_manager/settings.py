@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -121,3 +122,24 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# Ollama (the chore-assignment agent, chores/agent/runner.py)
+# Read from the environment so a different host, model or budget can be tried
+# without editing code — local inference setups differ per machine.
+
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
+# The task-8 spike's leading candidate, NOT yet verified: the spike needs a
+# machine with Ollama and has not been run (see _docs/model-spike.md). Treat
+# this as a placeholder until that table is filled in.
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:8b")
+
+# Seconds per HTTP call. Generous because a cold local model can take a while
+# to load; the agent runs inline in a request, so this is also the worst case
+# a user waits per model turn.
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "120"))
+
+# Hard cap on model turns per assignment run, so a model that loops (or keeps
+# retrying a bad id) gives up instead of pinning a worker.
+OLLAMA_MAX_ITERATIONS = int(os.environ.get("OLLAMA_MAX_ITERATIONS", "12"))
