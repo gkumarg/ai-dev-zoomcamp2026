@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -300,7 +301,23 @@ def run_once(host, model, timeout=REQUEST_TIMEOUT, think=None):
     }
 
 
+def make_output_encodable():
+    """Don't let a dash take down a twenty-minute run.
+
+    Windows defaults stdout to cp1252, which has no box-drawing characters, so
+    printing a result header raises UnicodeEncodeError — and redirecting output
+    to a file to share the results is exactly when it bites. Ask for UTF-8, and
+    fall back to replacing anything that still won't encode.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main():
+    make_output_encodable()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--models", nargs="+", default=DEFAULT_MODELS)
     parser.add_argument("--host", default=DEFAULT_HOST)
