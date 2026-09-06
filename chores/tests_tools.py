@@ -104,6 +104,20 @@ class GetHistoryTests(TestCase):
         with self.assertRaises(ToolError):
             get_history(999999)
 
+    def test_history_for_a_deleted_chore_still_serialises(self):
+        # History.chore is SET_NULL, so this is reachable in normal use: the
+        # effort still counts, but the model must not be handed a broken entry.
+        self.chores[0].delete()
+
+        result = get_history(self.alex.id)
+        json.dumps(result)
+
+        orphaned = [entry for entry in result["recent"] if entry["chore_id"] is None]
+        self.assertEqual(len(orphaned), 1)
+        self.assertIsNone(orphaned[0]["chore_name"])
+        self.assertEqual(orphaned[0]["effort"], 1)
+        self.assertEqual(result["effort_total"], 5)
+
     def test_json_round_trips(self):
         json.dumps(get_history(self.alex.id))
 
