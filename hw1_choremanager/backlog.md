@@ -7,16 +7,20 @@ something runnable. Tasks are sized to roughly one sitting each.
 roster, chores, completion, status, and the agent-driven assign page —
 with 153 tests and 100% statement coverage of the application code.
 
-**The one open task is [#8](#8-pick-the-ollama-model-spike): choosing the
-Ollama model.** It has now been run for the first time, on real hardware.
-`qwen3:8b` gets the answer right — all four chores assigned, no
-hallucinated ids, effort spread cut from 9 to 2 — but takes **289 seconds**
-per run, against a 300s timeout, which no synchronous web page can wear.
+**Task 8 is done: `qwen3:8b` with thinking on.** Measured on real
+hardware, it assigns every chore, invents no ids, and cuts the effort
+spread from 9 to 2. `OLLAMA_MODEL` and a 600s `OLLAMA_TIMEOUT` are set
+accordingly.
 
-So the open question has changed shape: not "does a local model work?"
-(it does) but "which configuration answers fast enough?" Next steps and
-two further findings are in
-[`_docs/model-spike.md`](_docs/model-spike.md).
+**It also opened a new problem, which is now the project's main one:**
+that configuration takes ~289s per run — a five-minute page load. The
+obvious shortcut is measured to be a trap: with thinking off it runs 11x
+faster and lands a spread of 10, *worse* than assigning nothing, while
+explaining itself just as persuasively. See
+[`_docs/model-spike.md`](_docs/model-spike.md) for all three findings.
+
+Next: measure `llama3.2:3b`, and if nothing is both fast and fair, pull
+the deferred async work forward.
 
 ---
 
@@ -115,7 +119,7 @@ validates ids and rejects assigning a chore that isn't `pending`.
 > local models emit them constantly — but booleans are rejected, so
 > `true` cannot silently become person 1.
 
-### 8. Pick the Ollama model (spike) ⚠️ **OPEN — needs local hardware**
+### 8. Pick the Ollama model (spike) ✅
 Try 2–3 local tool-calling models against a scripted 3-people/4-chores
 fixture; check they actually emit well-formed tool calls and don't
 hallucinate ids. Write the winner and the runners-up into
@@ -123,19 +127,21 @@ hallucinate ids. Write the winner and the runners-up into
 
 **Done when:** a model is named in the repo, with a sentence on why.
 
-> **Blocked here, not skipped.** The dev container has no Ollama and no
-> route to one, so no model has actually been measured.
+> **Measured on a Windows laptop, CPU inference.** `qwen3:8b` with thinking
+> on: 4/4 chores assigned, zero hallucinated ids, effort spread cut from 9 to
+> 2. Set as `OLLAMA_MODEL`, with `OLLAMA_TIMEOUT` raised to 600s to fit its
+> ~289s runtime.
 >
-> What exists: `scripts/spike_tool_calling.py`, a stdlib-only harness that
-> scores candidates on assignment completeness, resulting effort spread,
-> hallucinated ids and latency, against the same lopsided fixture
-> `seed_demo` creates. Self-tested with stubbed good and bad models
-> (spread 2 vs 11). A researched shortlist and an empty results table are
-> in [`_docs/model-spike.md`](_docs/model-spike.md).
+> Two findings the harness caught that reading the model's output would not
+> have. With thinking **off** it is 11x faster and lands a spread of **10** —
+> worse than the 9 you get by assigning nothing — while explaining that result
+> perfectly persuasively. And with thinking on, its summary described an
+> allocation different from the one it actually made. The explanation is not a
+> reliable record of the decision, in either direction.
 >
-> **To finish:** `ollama serve`, pull a couple of candidates, then
-> `python scripts/spike_tool_calling.py --runs 3`. Fill in the table,
-> name the winner in `_docs/plan.md`, and set `OLLAMA_MODEL`.
+> All three findings, and the remaining latency question, are in
+> [`_docs/model-spike.md`](_docs/model-spike.md). `llama3.2:3b` and
+> `deepseek-r1:latest` are pulled but not yet measured.
 
 ### 9. Agent loop ✅
 `chores/agent/runner.py` — a tool-calling loop against the Ollama chat

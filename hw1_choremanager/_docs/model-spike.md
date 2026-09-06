@@ -1,9 +1,12 @@
 # Model spike — picking the Ollama model (backlog task 8)
 
-**Status: harness built, shortlist researched, winner NOT yet chosen.**
-The spike has to run on a machine with Ollama; it could not be run in the
-cloud dev container (no Ollama, no GPU). Run it locally and fill in the
-Results table below, then record the winner in `_docs/plan.md`.
+**Status: run on real hardware. `qwen3:8b` with thinking ON is the choice** —
+the only configuration measured that assigns fairly. It takes ~289s per run,
+which the synchronous assign page cannot really wear, so the open question is
+now latency rather than capability. See [Results](#results).
+
+The spike has to run on a machine with Ollama; it cannot run in the cloud dev
+container (no Ollama, no GPU).
 
 ## Running it
 
@@ -27,14 +30,14 @@ The first real run of this hit `HTTP 500` after exactly `2m0s` on `qwen3:8b`,
 with the model taking 82 seconds just to load. That was the client's own
 timeout expiring mid-generation; Ollama logged the dropped connection as a 500.
 
-Three things help, in order of how much:
+What helps:
 
-- **`--no-think`.** qwen3 is a reasoning model and writes a long thinking block
-  before it ever emits a tool call. Turning that off is usually the difference
-  between twenty seconds and a timeout. It costs some reasoning quality, which
-  is worth measuring both ways — run it with and without.
-- **`--timeout 600`.** Slow hardware, or a big model, simply needs longer.
-- **A smaller model.** `granite4:3b` is on the shortlist precisely for this.
+- **`--timeout 600`.** Slow hardware, or a big model, simply needs longer. This
+  is the safe fix, and the app's default now matches it.
+- **A smaller model.** `granite4:3b` and `llama3.2:3b` are the speed options.
+- **`--no-think`** makes qwen3 11× faster — and, measured, wrecks the answer
+  (spread 10 against a do-nothing baseline of 9). Use it to characterise a
+  model, not to make one usable. See [Finding 1](#finding-1--the-fairness-reasoning-lives-in-the-thinking-block).
 
 A model that cannot answer inside a sane timeout is a finding, not just an
 inconvenience: v1 runs the agent inline in a Django request, so whatever it
@@ -93,51 +96,80 @@ the harness is that you don't have to trust them.
 
 ## Results
 
-Measured on a Windows laptop (CPU inference), thinking left **on**.
+Measured on a Windows laptop, CPU inference. **Baseline spread is 9** — what
+you get by assigning nothing at all. Lower is fairer.
 
-| Model | Assigned all 4 | Spread (from 9) | Refusals | Load | Run | Verdict |
+| Model | Thinking | Assigned | Spread | Refusals | Median run | Verdict |
 |---|---|---|---|---|---|---|
-| `qwen3:8b` | 4/4 | **2** | 0 | 91s | **289s** | Correct, far too slow |
+| `qwen3:8b` | **on** | 4/4 | **2** | 0 | **289s** | Correct. Unusably slow. |
+| `qwen3:8b` | **off** | 4/4 | **10** | 0 | **26.5s** | Fast. Worse than useless. |
 | `llama3.2:3b` | | | | | | not yet run |
 | `deepseek-r1:latest` | | | | | | not yet run |
 
-**Winner:** _still TBD_ — see the two findings below.
+**Chosen: `qwen3:8b` with thinking ON.** It is the only configuration measured
+that actually does the job. The cost is a five-minute page load, which is now
+the project's main open problem — see "What this means" below.
 
-### Finding 1 — the quality is genuinely there
+**Do not set `OLLAMA_THINK=0` with this model.** It is measured to make the
+result worse than not running the agent at all.
 
-`qwen3:8b` assigned all four chores, invented no ids (zero refusals), and
-took the effort spread from 9 down to 2 — near the optimum. It gave Alex,
-already on 12, nothing at all. This is the behaviour the whole feature exists
-for, and a rotation would not have produced it.
+### Finding 1 — the fairness reasoning lives in the thinking block
 
-### Finding 2 — 289 seconds is not a web page
+With thinking on, `qwen3:8b` assigned all four chores, invented no ids, and cut
+the spread from 9 to 2 — near optimal, giving Alex (already on 12) nothing. A
+rotation would not have produced that.
 
-The run took **4 minutes 49 seconds**, against an `OLLAMA_TIMEOUT` default of
-300s. That is a 10-second margin, on the spike's tiny 3-person fixture. A real
-household with more history would blow straight through it.
+Turning thinking off made it **11x faster and completely wrong**: spread 10,
+against a do-nothing baseline of 9. Stable across three runs, so this is the
+model's behaviour, not variance.
 
-The plan's v1 choice — agent runs inline in the request — assumed the model
-answered in something like a spinner's worth of time. At five minutes it does
-not. The options, cheapest first:
+That is the finding worth keeping. `--no-think` reads like a pure latency
+optimisation, and it is not: for this model the thinking block *is* the
+fairness reasoning. Removing it does not trade some quality for speed — it
+removes the capability while leaving the confident explanation intact.
 
-1. `--no-think` / `OLLAMA_THINK=0`. qwen3 spends most of that time in its
-   reasoning block. **Run the spike both ways before deciding anything else.**
-2. A smaller model. `llama3.2:3b` is pulled and untested.
-3. Take the deferred Celery work off the backlog and make the run async.
+### Finding 2 — the fast, wrong answer explains itself beautifully
 
-### Finding 3 — the explanation did not match the assignment
+Thinking off, the model said:
 
-The reasoning text said Sam took *Clean bathroom + Bins* and Jo took
-*Vacuum + Dishes*. That allocation produces a spread of **3**. The harness
-measured **2**, so that is not what it actually did — the real assignment was
-one of three other combinations, all better than the one described.
+> Alex, who has already done the most work, was given the least effort chore
+> (Bins). Sam, with the least cumulative effort, was assigned the Dishes. Jo,
+> with moderate effort, was given the more demanding tasks.
 
-The narrative is post-hoc and only roughly true. That matters here because the
-plan makes "the agent explains its reasoning" a feature in its own right, and
-this explanation would mislead a user comparing it against the assignments on
-screen. Worth checking whether it holds across `--runs 3`: an occasional slip
-is one thing, a consistent mismatch is a reason to prefer another model, or to
-stop presenting the text as an account of what it did.
+It states the right principle and then inverts it. Sam, furthest *behind* at 3,
+gets the second-smallest chore. Jo, in the middle, gets the two heaviest and
+ends up top of the table at 15. Final totals: Alex 13, Sam 5, Jo 15.
 
-Note that this is only detectable because the harness scores the *outcome*
-independently of what the model says about it.
+Read on its own, that paragraph is entirely convincing. This is why the harness
+scores the outcome independently of the model's account of it — eyeballing the
+explanation would have passed this straight through.
+
+### Finding 3 — with thinking on, the narrative lags the actions
+
+The thinking-on run described an allocation that computes to a spread of 3,
+while the harness measured 2. It under-described work that was actually better
+than its summary claimed — the final message appears to be written from the
+plan in the thinking block rather than from the tool calls it ended up making.
+
+Less alarming than Finding 2, but the same lesson: the explanation is not a
+reliable record of what happened. With thinking off the narrative matched the
+actions exactly — and the actions were wrong. Accurate narration and good
+decisions are separate properties, and this model has them one at a time.
+
+### What this means
+
+The plan's v1 choice to run the agent inline in a request assumed a model
+answered in about a spinner's worth of time. Measured, the only configuration
+that works takes five minutes. Something has to give:
+
+1. **Measure `llama3.2:3b`** (pulled, untested). If a small non-reasoning model
+   can hold the spread near 2, the problem disappears. Given what thinking-off
+   did to qwen3, temper expectations.
+2. **Pull the deferred async work forward.** Keep thinking on, run the agent off
+   the request path, poll for the result. This is the honest fix, and the plan
+   already lists it under Deferred.
+3. **Accept the wait**, with a clear "this takes a few minutes" on the page.
+   Fine for a graded demo; not for anything real.
+
+Whatever wins, the timeout must clear 289s with headroom — `OLLAMA_TIMEOUT`
+now defaults to 600.
