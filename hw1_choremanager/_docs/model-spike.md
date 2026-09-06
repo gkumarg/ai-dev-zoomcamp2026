@@ -14,7 +14,31 @@ python scripts/spike_tool_calling.py --runs 3
 ```
 
 Stdlib only — no venv, no Django, no `ollama` package needed. Options:
-`--models qwen3:8b llama3.1:8b`, `--host`, `--runs`.
+`--models qwen3:8b llama3.1:8b`, `--host`, `--runs`, `--timeout`, `--no-think`.
+
+Models you have not pulled are listed and skipped, so only what is actually
+installed gets tested. Each model is loaded once before timing starts — a cold
+model can spend a minute-plus loading, and counting that against the first run
+makes a fast model look slow.
+
+### If it times out
+
+The first real run of this hit `HTTP 500` after exactly `2m0s` on `qwen3:8b`,
+with the model taking 82 seconds just to load. That was the client's own
+timeout expiring mid-generation; Ollama logged the dropped connection as a 500.
+
+Three things help, in order of how much:
+
+- **`--no-think`.** qwen3 is a reasoning model and writes a long thinking block
+  before it ever emits a tool call. Turning that off is usually the difference
+  between twenty seconds and a timeout. It costs some reasoning quality, which
+  is worth measuring both ways — run it with and without.
+- **`--timeout 600`.** Slow hardware, or a big model, simply needs longer.
+- **A smaller model.** `granite4:3b` is on the shortlist precisely for this.
+
+A model that cannot answer inside a sane timeout is a finding, not just an
+inconvenience: v1 runs the agent inline in a Django request, so whatever it
+takes here is what someone stares at a spinner for.
 
 ## What it measures
 

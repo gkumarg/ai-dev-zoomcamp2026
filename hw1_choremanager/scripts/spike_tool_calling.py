@@ -182,18 +182,67 @@ class Fixture:
             return self._refuse(f"Bad arguments to {name}: {exc}")
 
 
-def chat(host, model, messages):
-    payload = json.dumps(
-        {"model": model, "messages": messages, "tools": TOOLS, "stream": False}
-    ).encode()
-    request = urllib.request.Request(
-        f"{host}/api/chat", data=payload, headers={"Content-Type": "application/json"}
+def is_timeout(exc):
+    """Did this fail because we ran out of patience, or because nothing answered?
+
+    Worth distinguishing: "Ollama is not running" and "the model is still
+    generating" look identical in a traceback and call for opposite fixes.
+    urllib reports read timeouts either directly or wrapped in a URLError.
+    """
+    return isinstance(exc, TimeoutError) or isinstance(
+        getattr(exc, "reason", None), TimeoutError
     )
-    with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+
+
+def installed_models(host, timeout=10):
+    """What Ollama already has locally, or None if we couldn't ask."""
+    try:
+        with urllib.request.urlopen(f"{host}/api/tags", timeout=timeout) as response:
+            body = json.loads(response.read())
+    except Exception:  # noqa: BLE001 - preflight is a convenience, never fatal
+        return None
+    return {entry.get("name", "") for entry in body.get("models", [])}
+
+
+def chat(host, model, messages, timeout=REQUEST_TIMEOUT, think=None, tools=TOOLS):
+    body = {"model": model, "messages": messages, "stream": False}
+    if tools is not None:
+        body["tools"] = tools
+    if think is not None:
+        # Reasoning models (qwen3 and friends) emit a long thinking block before
+        # the tool call. Turning it off is often the difference between 20s and
+        # a timeout — at some cost to reasoning quality, which is the tradeoff
+        # this spike exists to measure.
+        body["think"] = think
+    request = urllib.request.Request(
+        f"{host}/api/chat",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read())
 
 
-def run_once(host, model):
+def warm_up(host, model, timeout, think=None):
+    """Load the model before timing anything.
+
+    A cold model can spend a minute-plus loading before it generates a token.
+    Counting that against the first run makes a fast model look slow and can
+    blow the timeout outright.
+    """
+    started = time.monotonic()
+    chat(
+        host,
+        model,
+        [{"role": "user", "content": "Reply with the word ready."}],
+        timeout=timeout,
+        think=think,
+        tools=None,
+    )
+    return time.monotonic() - started
+
+
+def run_once(host, model, timeout=REQUEST_TIMEOUT, think=None):
     """One full agent loop. Returns a scorecard."""
     fixture = Fixture()
     messages = [
@@ -204,7 +253,7 @@ def run_once(host, model):
     started = time.monotonic()
 
     for _ in range(MAX_ITERATIONS):
-        reply = chat(host, model, messages)["message"]
+        reply = chat(host, model, messages, timeout=timeout, think=think)["message"]
         messages.append(reply)
 
         calls = reply.get("tool_calls") or []
@@ -242,7 +291,10 @@ def run_once(host, model):
         "spread": max(totals) - min(totals),  # lower is fairer; 9 if it does nothing
         "gave_alex_least": fixture.assignments and
             sum(1 for p in fixture.assignments.values() if p == 1) == 0,
-        "explained": len(final_text.split()) >= 15,
+        # The plan requires the agent to explain itself, so the only failure
+        # here is saying nothing at all. Judging brevity by a word count marks
+        # good, concise answers as failures — read the quoted text instead.
+        "explained": bool(final_text.strip()),
         "reasoning": final_text.strip()[:300],
         "refusal_samples": fixture.refusals[:3],
     }
@@ -254,27 +306,77 @@ def main():
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--runs", type=int, default=1,
                         help="Repeat each model; tool calling is stochastic.")
+    parser.add_argument("--timeout", type=int, default=REQUEST_TIMEOUT,
+                        help=f"Seconds per model call (default {REQUEST_TIMEOUT}). "
+                             "Raise this on slow hardware.")
+    parser.add_argument("--no-think", dest="think", action="store_const", const=False,
+                        default=None,
+                        help="Ask reasoning models (qwen3 and friends) to skip their "
+                             "thinking block. Much faster, and often the difference "
+                             "between a result and a timeout.")
     args = parser.parse_args()
 
-    print(f"Ollama at {args.host}, {args.runs} run(s) per model\n")
+    print(f"Ollama at {args.host}, {args.runs} run(s) per model, "
+          f"{args.timeout}s timeout"
+          f"{', thinking off' if args.think is False else ''}\n")
     print("A fair result assigns all 4 chores, gives Alex (effort 12) none,")
     print("and lands the spread well below the starting 9.\n")
 
+    # Ask up front rather than firing a request per missing model and reading
+    # four identical 404s.
+    available = installed_models(args.host)
+    if available is None:
+        print(f"! Could not read {args.host}/api/tags — is `ollama serve` running?\n")
+    else:
+        missing = [model for model in args.models if model not in available]
+        if missing:
+            print("Not pulled, skipping: " + ", ".join(missing))
+            print("   " + "  ".join(f"ollama pull {model}" for model in missing) + "\n")
+            args.models = [model for model in args.models if model in available]
+        if not args.models:
+            print("Nothing to test. Pull one of the candidates and re-run.")
+            return
+
     for model in args.models:
         print(f"── {model}")
+
+        try:
+            load_seconds = warm_up(args.host, model, args.timeout, args.think)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace")[:200].strip()
+            print(f"   HTTP {exc.code} on warm-up — {detail or 'no detail'}\n")
+            continue
+        except Exception as exc:  # noqa: BLE001 - a spike should survive a bad model
+            if is_timeout(exc):
+                print(f"   timed out loading after {args.timeout}s. This model is very "
+                      f"slow to load here — try `--timeout {args.timeout * 3}`, a smaller "
+                      f"model, or check it fits in memory.\n")
+            else:
+                print(f"   warm-up failed — {type(exc).__name__}: {exc}\n")
+            continue
+        print(f"   loaded in {load_seconds:.0f}s (not counted below)")
+
         results = []
         for run in range(args.runs):
             try:
-                results.append(run_once(args.host, model))
+                results.append(run_once(args.host, model, args.timeout, args.think))
             except urllib.error.HTTPError as exc:
-                print(f"   run {run + 1}: HTTP {exc.code} — is the model pulled? "
-                      f"`ollama pull {model}`\n")
-                break
-            except (urllib.error.URLError, TimeoutError) as exc:
-                print(f"   run {run + 1}: cannot reach Ollama ({exc}). Is `ollama serve` up?\n")
+                detail = exc.read().decode(errors="replace")[:200].strip()
+                print(f"   run {run + 1}: HTTP {exc.code} — {detail or 'no detail'}\n")
                 break
             except Exception as exc:  # noqa: BLE001 - a spike should survive a bad model
-                print(f"   run {run + 1}: crashed — {type(exc).__name__}: {exc}\n")
+                if is_timeout(exc):
+                    # The server is up — it answered the warm-up. This is the
+                    # model being too slow, which is itself a finding.
+                    print(f"   run {run + 1}: timed out after {args.timeout}s mid-run. "
+                          f"Retry with `--timeout {args.timeout * 3}`"
+                          f"{'' if args.think is False else ' or `--no-think`'}. "
+                          f"A model this slow is a poor fit for a synchronous view.\n")
+                elif isinstance(exc, urllib.error.URLError):
+                    print(f"   run {run + 1}: lost the connection to Ollama ({exc.reason}).\n")
+                else:
+                    print(f"   run {run + 1}: crashed — {type(exc).__name__}: {exc}\n")
+                break
 
         if not results:
             continue

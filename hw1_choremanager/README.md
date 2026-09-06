@@ -53,8 +53,15 @@ Configuration, all via environment variables:
 |---|---|---|
 | `OLLAMA_HOST` | `http://localhost:11434` | where Ollama is listening |
 | `OLLAMA_MODEL` | `qwen3:8b` | must support tool calling |
-| `OLLAMA_TIMEOUT` | `120` | seconds per model call |
+| `OLLAMA_TIMEOUT` | `300` | seconds per model call |
+| `OLLAMA_THINK` | unset | `0` disables the thinking block on reasoning models |
 | `OLLAMA_MAX_ITERATIONS` | `12` | model turns before the run is cut off |
+
+If the assign page reports that Ollama did not finish in time, the model is
+still generating rather than missing: a cold model can take a minute-plus to
+load, and a reasoning model like qwen3 then thinks at length before its first
+tool call. Set `OLLAMA_THINK=0`, raise `OLLAMA_TIMEOUT`, or use a smaller
+model such as `granite4:3b`.
 
 > **The default model is a placeholder.** The comparison spike has not been
 > run yet — it needs a machine with Ollama. See

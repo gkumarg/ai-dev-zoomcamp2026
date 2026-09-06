@@ -6,6 +6,7 @@ tool dispatch, refusals, the iteration cap, and transport failure.
 """
 
 import copy
+import io
 import json
 import urllib.error
 from unittest import mock
@@ -485,6 +486,108 @@ class OllamaClientTests(TestCase):
 
         with self.assertRaises(TransportError):
             client.chat(messages=[], tools=[])
+
+    def test_a_timeout_is_not_reported_as_an_unreachable_server(self):
+        # These are opposite problems: the server answering slowly needs a
+        # longer timeout or a smaller model, and telling someone whose server
+        # is plainly up to check `ollama serve` sends them the wrong way.
+        client = self._client_raising(TimeoutError("timed out"))
+
+        with self.assertRaises(TransportError) as ctx:
+            client.chat(messages=[], tools=[])
+
+        message = str(ctx.exception)
+        self.assertIn("did not finish", message)
+        self.assertNotIn("ollama serve", message)
+
+    def test_a_wrapped_timeout_is_also_recognised(self):
+        # urllib reports read timeouts wrapped in a URLError as often as not.
+        client = self._client_raising(urllib.error.URLError(TimeoutError("timed out")))
+
+        with self.assertRaises(TransportError) as ctx:
+            client.chat(messages=[], tools=[])
+
+        self.assertIn("did not finish", str(ctx.exception))
+
+    def test_the_timeout_message_names_the_knobs_that_fix_it(self):
+        client = self._client_raising(TimeoutError("timed out"))
+
+        with self.assertRaises(TransportError) as ctx:
+            client.chat(messages=[], tools=[])
+
+        message = str(ctx.exception)
+        self.assertIn("OLLAMA_TIMEOUT", message)
+        self.assertIn("OLLAMA_THINK", message)
+
+    def test_a_404_still_suggests_pulling_the_model(self):
+        client = self._client_raising(
+            urllib.error.HTTPError("http://x/api/chat", 404, "Not Found", {}, None)
+        )
+
+        with self.assertRaises(TransportError) as ctx:
+            client.chat(messages=[], tools=[])
+
+        self.assertIn("ollama pull", str(ctx.exception))
+
+    def test_ollamas_own_error_text_is_surfaced(self):
+        # Ollama explains itself ("model requires more system memory"); dropping
+        # that and printing a bare status code throws away the diagnosis.
+        error = urllib.error.HTTPError(
+            "http://x/api/chat", 500, "Server Error", {},
+            io.BytesIO(b'{"error":"model requires more system memory"}'),
+        )
+        client = self._client_raising(error)
+
+        with self.assertRaises(TransportError) as ctx:
+            client.chat(messages=[], tools=[])
+
+        self.assertIn("requires more system memory", str(ctx.exception))
+
+    def test_a_500_does_not_blame_a_missing_model(self):
+        client = self._client_raising(
+            urllib.error.HTTPError("http://x/api/chat", 500, "Server Error", {}, None)
+        )
+
+        with self.assertRaises(TransportError) as ctx:
+            client.chat(messages=[], tools=[])
+
+        self.assertNotIn("ollama pull", str(ctx.exception))
+
+
+class ThinkingTests(TestCase):
+    """Reasoning models can spend longer thinking than the whole timeout."""
+
+    def _capture(self, **kwargs):
+        sent = {}
+
+        def fake_urlopen(request, timeout=None):
+            sent.update(json.loads(request.data))
+            return OllamaClientTests.FakeResponse(
+                json.dumps({"message": {"role": "assistant", "content": "hi"}}).encode()
+            )
+
+        OllamaClient(urlopen=fake_urlopen, **kwargs).chat(messages=[], tools=[])
+        return sent
+
+    def test_thinking_is_left_alone_by_default(self):
+        # Models that cannot think reject the parameter outright, so it is only
+        # sent when someone has actually asked for a setting.
+        self.assertNotIn("think", self._capture())
+
+    @override_settings(OLLAMA_THINK=False)
+    def test_thinking_can_be_turned_off_by_setting(self):
+        self.assertIs(self._capture()["think"], False)
+
+    @override_settings(OLLAMA_THINK=True)
+    def test_thinking_can_be_turned_on_by_setting(self):
+        self.assertIs(self._capture()["think"], True)
+
+    def test_an_explicit_argument_wins(self):
+        self.assertIs(self._capture(think=False)["think"], False)
+
+
+class EmptyStateTests(TestCase):
+    """Nothing to do must be answered instantly — not after 30s of inference."""
 
     def test_http_error_becomes_transport_error(self):
         client = self._client_raising(

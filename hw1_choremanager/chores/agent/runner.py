@@ -31,6 +31,17 @@ from . import tools
 from .schemas import SYSTEM_PROMPT, TOOLS, USER_PROMPT
 
 
+def _is_timeout(exc):
+    """Did we run out of patience, or was nothing listening?
+
+    urllib surfaces a read timeout either directly or wrapped in a URLError,
+    and the two causes need opposite advice.
+    """
+    return isinstance(exc, TimeoutError) or isinstance(
+        getattr(exc, "reason", None), TimeoutError
+    )
+
+
 class TransportError(Exception):
     """Ollama could not be reached, or did not answer with usable JSON.
 
@@ -102,21 +113,34 @@ class OllamaClient:
     method can be injected in its place.
     """
 
-    def __init__(self, host=None, model=None, timeout=None, urlopen=urllib.request.urlopen):
+    def __init__(self, host=None, model=None, timeout=None, think=None,
+                 urlopen=urllib.request.urlopen):
         # Settings are read here rather than at import time so `override_settings`
         # (and a plain env change between runs) actually takes effect.
         self.host = (host or settings.OLLAMA_HOST).rstrip("/")
         self.model = model or settings.OLLAMA_MODEL
         self.timeout = timeout if timeout is not None else settings.OLLAMA_TIMEOUT
+        self.think = think if think is not None else settings.OLLAMA_THINK
         self._urlopen = urlopen
 
+    @staticmethod
+    def _detail(exc):
+        """Ollama's own error text, which usually names the real problem."""
+        try:
+            payload = json.loads(exc.read())
+        except Exception:  # noqa: BLE001 - diagnostics must never mask the error
+            return ""
+        return payload.get("error", "") if isinstance(payload, dict) else ""
+
     def chat(self, messages, tools):
-        payload = json.dumps(
-            {"model": self.model, "messages": messages, "tools": tools, "stream": False}
-        ).encode()
+        body = {"model": self.model, "messages": messages, "tools": tools, "stream": False}
+        if self.think is not None:
+            # Reasoning models spend a long thinking block before the tool call.
+            # On modest hardware that alone can outlast the timeout.
+            body["think"] = self.think
         request = urllib.request.Request(
             f"{self.host}/api/chat",
-            data=payload,
+            data=json.dumps(body).encode(),
             headers={"Content-Type": "application/json"},
         )
 
@@ -126,11 +150,26 @@ class OllamaClient:
         except urllib.error.HTTPError as exc:
             # HTTPError subclasses URLError, so it has to be caught first. A 404
             # here almost always means the model was never pulled.
+            detail = self._detail(exc)
             raise TransportError(
                 f"Ollama at {self.host} returned HTTP {exc.code} for model "
-                f"'{self.model}'. Is the model pulled (`ollama pull {self.model}`)?"
+                f"'{self.model}'"
+                + (f": {detail}" if detail else "")
+                + (f". Is the model pulled (`ollama pull {self.model}`)?"
+                   if exc.code == 404 else ".")
             ) from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            # A timeout is not the same problem as an unreachable server, and
+            # they call for opposite fixes — saying "is ollama serve running?"
+            # to someone whose server is up and mid-generation sends them the
+            # wrong way entirely.
+            if _is_timeout(exc):
+                raise TransportError(
+                    f"Ollama at {self.host} did not finish within "
+                    f"{self.timeout}s. The model '{self.model}' is probably still "
+                    f"generating — raise OLLAMA_TIMEOUT, set OLLAMA_THINK=0 for a "
+                    f"reasoning model, or use a smaller model."
+                ) from exc
             raise TransportError(
                 f"Could not reach Ollama at {self.host} ({exc}). Is `ollama serve` running?"
             ) from exc
